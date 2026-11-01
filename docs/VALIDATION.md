@@ -1,0 +1,19 @@
+# Validation record
+
+Validated on November 1, 2026, using Windows 11 x64, Python 3.12.14, PyQt6 / Qt 6.10.2 and PyInstaller 6.19.0.
+
+## Passed
+
+- **31 automated checks**: feed parsing and malformed data, missing inventories, event/traveler handling, identity separation, countdowns, poll bounds, notification baseline and deduplication, restock cycles, preferences recovery and persistence, HTTP errors, malformed JSON, response-size limit, `Retry-After`, watchlist interactions, both overlays, unavailable watched items, stale snapshots and geometry recovery.
+- **Public feed inspection**: traced the homepage's script to `/api/live`, then successfully requested it without cookies or authorization. See [FEED.md](FEED.md).
+- **Live Qt HTTPS integration**: the same client used in production returned 45 items and a LIVE state. Server time advanced between independent observations.
+- **Visual inspection**: rendered the actual Qt watchlist, preferences page, bar and panel using the live response. Checked readable text, quantities, countdowns, controls and scrolling. The included images are captures from that check, not current stock readings.
+- **Windows executable build**: completed a single-file x64 build. The script isolates its DLL search path so unrelated media-tool libraries cannot contaminate the executable.
+- **Packaged startup check**: the actual executable returned `{"startup": "ok", "overlays": ["bar", "panel"], "qt": true, "frozen": true}`.
+- **Packaged live connection**: launched the normal Windows executable in an isolated background test. Its saved discovered catalog contained all 45 real feed items, with no application errors logged. Test processes were closed afterward.
+
+## Scope of the checks
+
+The visual captures use Qt's offscreen renderer with system fonts loaded explicitly. Windows notification banners, sound delivery, tray-menu interactions, exclusive-fullscreen games, other monitor/DPI configurations and other computers were not manually verified. The app provides a **Test notification** button and **Reset overlay positions** action for those environment-specific checks.
+
+The build is unsigned. No installer, automatic Windows sign-in registration, privileged service, or auto-update mechanism is included. Stock accuracy depends on the public website's feed and future schema stability.
