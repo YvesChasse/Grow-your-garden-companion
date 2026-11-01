@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+work/
+dist/
+*.spec
+*.log
+*.lock
+.env
+.env.*
+preferences.json
+.pytest_cache/
+.idea/
+.vscode/
+
