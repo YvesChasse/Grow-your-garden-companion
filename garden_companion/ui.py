@@ -11,8 +11,8 @@ from PyQt6.QtWidgets import (
     QTabWidget, QVBoxLayout, QWidget,
 )
 
-from .core import AlertTracker, CATEGORIES, Snapshot, countdown
-from .network import StockClient
+from .core import AlertTracker, WorldAlertTracker, CATEGORIES, Snapshot, countdown
+from .network import StockClient, CatalogClient
 
 STYLE = """
 QWidget { background: #141020; color: #efeaf9; font-family: 'Segoe UI'; font-size: 13px; }
@@ -132,7 +132,7 @@ class Overlay(QWidget):
         self.setWindowTitle(f"Garden Companion · {mode.title()}")
         self.setWindowIcon(controller.icon)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setMinimumSize(650, 116) if mode == "bar" else self.setMinimumSize(310, 300)
+        self.setMinimumSize(650, 142) if mode == "bar" else self.setMinimumSize(310, 300)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         self.root = QFrame()
@@ -163,6 +163,10 @@ class Overlay(QWidget):
         self.clock_line.setStyleSheet("font-size: 11px;")
         if mode == "panel":
             layout.addWidget(self.clock_line)
+        self.world_line = label('', 'muted')
+        self.world_line.setStyleSheet('font-size: 10px;')
+        self.world_line.setWordWrap(mode == 'panel')
+        layout.addWidget(self.world_line)
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded if mode == "bar" else Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -261,6 +265,9 @@ class Overlay(QWidget):
         self.status.setText(c.short_status())
         self.status.setStyleSheet("font-size: 10px; color: " + ("#94ecc2" if c.is_fresh() else "#f1bd7c") + ";")
         self.status.setToolTip(c.status_detail())
+        self.world_line.setVisible(c.preferences.values['world_overlay'])
+        self.world_line.setText(c.world_summary())
+        self.world_line.setToolTip(c.world_summary())
         if c.snapshot:
             now = c.server_now()
             prefix = "" if c.is_fresh() else "Last known • "
@@ -350,8 +357,22 @@ class MainWindow(QWidget):
         self.empty = label("Connecting to garden.orpine.app…", "muted")
         self.empty.setWordWrap(True)
         stock_layout.addWidget(self.empty)
-        stock_layout.addWidget(label("Check an item to watch it. Event and traveler items appear when their shops are open.", "muted"))
+        catalog_actions = QHBoxLayout()
+        catalog_actions.addWidget(button('Watch selected with Traveler', self.watch_with_traveler))
+        self.catalog_status = label('Loading the item catalog…', 'muted')
+        self.catalog_status.setWordWrap(True)
+        catalog_actions.addWidget(self.catalog_status, 1)
+        stock_layout.addLayout(catalog_actions)
+        note = label('Catalog items can be watched before they are stocked. A Traveler watch waits for that name in his actual offers; it does not guarantee he sells it.', 'muted')
+        note.setWordWrap(True)
+        stock_layout.addWidget(note)
         self.tabs.addTab(self.stock_tab, "Watchlist")
+        from .world_ui import WorldPanel
+        self.world_panel = WorldPanel(controller)
+        world_scroll = QScrollArea()
+        world_scroll.setWidgetResizable(True)
+        world_scroll.setWidget(self.world_panel)
+        self.tabs.addTab(world_scroll, 'World')
         self.tabs.addTab(self.build_preferences(), "Preferences")
         bottom = QHBoxLayout()
         self.detail = label("Connecting to the public stock feed…", "muted")
@@ -370,7 +391,7 @@ class MainWindow(QWidget):
         sections = [
             ("YOUR OVERLAYS", [("bar_visible", "Show compact top-screen bar"),
                                ("panel_visible", "Show floating mini-panel")]),
-            ("NOTIFICATIONS", [("notifications", "Desktop stock alerts"), ("sound", "Play a sound with alerts"),
+            ("NOTIFICATIONS", [("notifications", "Desktop alerts (stock and enabled world alerts)"), ("sound", "Play a sound with alerts"),
                                 ("repeat_alerts", "Alert again each restock, even if still in stock")]),
             ("IN THE BACKGROUND", [("start_in_tray", "Start with the main window hidden")]),
         ]
@@ -466,9 +487,9 @@ class MainWindow(QWidget):
             watch.setData(Qt.ItemDataRole.UserRole, key)
             watch.setToolTip(f"Watch {name}")
             self.table.setItem(row, 0, watch)
-            values = [name, CATEGORIES.get(category, category), item.rarity if item else "—",
+            values = [name, CATEGORIES.get(category, category), item.rarity if item else catalog.get(key, {}).get('rarity', '—'),
                       str(item.stock) if item else "—",
-                      f"{item.price:,.0f}" + (f" {item.currency}" if item.currency != "Coins" else "") if item else "—", ""]
+                      f"{item.price:,.0f}" + (f" {item.currency}" if item.currency not in ("Coins", "Sheckles") else "") if item else "—", ""]
             for column, text in enumerate(values, 1):
                 cell = QTableWidgetItem(text)
                 cell.setToolTip(text if item else "Not in the current feed. The watch remains saved.")
@@ -480,6 +501,27 @@ class MainWindow(QWidget):
         self.empty.setVisible(not rows)
         self.empty.setText("No items match your filters." if keys else "Waiting for the first successful feed response. Items will appear automatically.")
         self.tick()
+
+    def watch_with_traveler(self):
+        selected = self.table.selectionModel().selectedRows()
+        if not selected:
+            self.catalog_status.setText('Select an item row first, then add its Traveler watch.')
+            return
+        c = self.controller
+        watched = c.watched
+        for index in selected:
+            row = index.row()
+            name = self.table.item(row, 1).text()
+            key = 'traveler:' + name
+            cached = c.preferences.values['catalog'].get(key, {})
+            c.preferences.values['catalog'][key] = {**cached, 'name': name, 'category': 'traveler',
+                                                    'rarity': self.table.item(row, 3).text()}
+            watched.add(key)
+        c.preferences.values['watchlist'] = sorted(watched)
+        c.save()
+        self.populate()
+        for overlay in c.overlays.values():
+            overlay.rebuild()
 
     def watch_changed(self, item):
         if self.updating or item.column() != 0:
@@ -499,6 +541,8 @@ class MainWindow(QWidget):
 
     def tick(self):
         c = self.controller
+        self.world_panel.tick()
+        self.catalog_status.setText(c.catalog_error or c.catalog_message)
         self.status.setText("● " + c.short_status())
         self.status.setStyleSheet("color: " + ("#94ecc2" if c.is_fresh() else "#f1bd7c") + "; font-weight: 600;")
         self.detail.setText(c.preferences.warning or c.status_detail())
@@ -540,8 +584,11 @@ class Controller:
         self.received_at = 0.0
         self.last_update = ""
         self.error = ""
+        self.catalog_error = ''
+        self.catalog_message = 'Loading the item catalog…' if network else 'Saved catalog; live catalog loading is disabled'
         self.quitting = False
         self.alerts = AlertTracker()
+        self.world_alerts = WorldAlertTracker()
         self.icon = make_icon()
         self.app.setWindowIcon(self.icon)
         self.app.setStyleSheet(STYLE)
@@ -549,6 +596,9 @@ class Controller:
         self.client = StockClient()
         self.client.received.connect(self.accept_snapshot)
         self.client.failed.connect(self.feed_failed)
+        self.catalog_client = CatalogClient()
+        self.catalog_client.received.connect(self.accept_catalog)
+        self.catalog_client.failed.connect(self.catalog_failed)
         self.tray_available = tray and QSystemTrayIcon.isSystemTrayAvailable()
         self.overlays = {}
         self.window = MainWindow(self)
@@ -587,6 +637,7 @@ class Controller:
         self.app.aboutToQuit.connect(self.cleanup)
         if network:
             QTimer.singleShot(0, self.client.refresh)
+            QTimer.singleShot(0, self.catalog_client.refresh)
 
     @property
     def watched(self):
@@ -614,6 +665,30 @@ class Controller:
                 f"  ·  {self.snapshot.weather}  ·  {self.snapshot.event_name}"
         return "Connecting to garden.orpine.app · no account or browser required"
 
+    def world_summary(self):
+        if not self.snapshot:
+            return 'Waiting for world status…'
+        s, now = self.snapshot, self.server_now()
+        parts = [s.weather + ' ' + countdown(s.weather_until, now),
+                 ('Traveler leaves ' if s.traveler_open else 'Traveler arrives ') + countdown(s.deadlines['traveler'], now)]
+        if s.sell_multiplier > 1 and s.bonus_until is not None and s.bonus_until > s.now:
+            parts.append(f'×{s.sell_multiplier:g} sell · ends {countdown(s.bonus_until, now)}')
+        return ('' if self.is_fresh() else 'Last known · ') + '  ·  '.join(parts)
+
+    def accept_catalog(self, catalog):
+        for item in catalog.items:
+            previous = self.preferences.values['catalog'].get(item.key, {})
+            self.preferences.values['catalog'][item.key] = {**previous, 'name': item.name,
+                                                           'category': item.category, 'rarity': item.rarity}
+        self.catalog_error = ''
+        self.catalog_message = f'{len(catalog.items)} catalog items · quantities come from live stock'
+        self.save()
+        self.window.populate()
+
+    def catalog_failed(self, message):
+        self.catalog_error = 'Catalog unavailable; saved items kept. ' + message
+        self.window.catalog_status.setText(self.catalog_error)
+
     def accept_snapshot(self, snapshot):
         # Detect a cached/frozen response against the monotonic server clock.
         if self.snapshot and snapshot.now < self.server_now() - 30:
@@ -625,9 +700,13 @@ class Controller:
         self.last_update = datetime.now().strftime("%I:%M:%S %p").lstrip("0")
         self.error = ""
         for item in snapshot.items:
-            self.preferences.values["catalog"][item.key] = {"name": item.name, "category": item.category}
+            self.preferences.values["catalog"][item.key] = {"name": item.name, "category": item.category, "rarity": item.rarity}
         self.save()
-        alerts = self.alerts.update(snapshot, self.watched, self.preferences.values["repeat_alerts"])
+        alerts, world_alerts = [], []
+        if self.is_fresh():
+            alerts = self.alerts.update(snapshot, self.watched, self.preferences.values["repeat_alerts"])
+            world_alerts = self.world_alerts.update(snapshot, weather=self.preferences.values['weather_alerts'],
+                traveler=self.preferences.values['traveler_alerts'], bonus=self.preferences.values['bonus_alerts'])
         self.window.populate()
         for overlay in self.overlays.values():
             overlay.rebuild()
@@ -636,6 +715,8 @@ class Controller:
             if len(alerts) > 5:
                 message += f" and {len(alerts) - 5} more"
             self.notify("Your garden finds are in stock", message)
+        if world_alerts and self.preferences.values['notifications']:
+            self.notify('Garden world update', ' · '.join(message for title, message in world_alerts))
 
     def feed_failed(self, message):
         self.error = message
@@ -714,6 +795,7 @@ class Controller:
 
     def cleanup(self):
         self.client.stop()
+        self.catalog_client.stop()
         self.timer.stop()
         self.save_window_geometry()
         for overlay in self.overlays.values():

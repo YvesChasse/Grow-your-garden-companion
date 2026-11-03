@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.0 — 2026-11-02
+
+- Migrated live stock to the documented `/api/v1/live` endpoint.
+- Added `/api/v1/items` catalog loading at startup and daily, with locally retained names and no fabricated stock quantities.
+- Added advance Traveler watches by name, without implying that catalog entries are guaranteed Traveler offers.
+- Added a World tab with weather, Traveler, sell-bonus and event countdowns, plus optional world status in both overlays.
+- Added opt-in weather-change, Traveler-arrival and sell-bonus alerts, with quiet startup and duplicate suppression.
+- Kept existing preferences and separated catalog failures from live-feed status.
+- Added API, catalog, notification and UI regressions; 50 automated checks pass.
+
+This update contains no macro, OCR or game-input code.
+
 ## 1.0.0 — 2026-11-01
 
 Initial Windows desktop release.

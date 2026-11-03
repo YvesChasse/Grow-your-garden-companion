@@ -7,6 +7,8 @@ DEFAULTS = {
     "version": 1, "watchlist": [], "catalog": {}, "panel_visible": True,
     "bar_visible": False, "notifications": True, "sound": False,
     "repeat_alerts": True, "start_in_tray": False, "opacity": 96,
+    "weather_alerts": False, "traveler_alerts": False, "bonus_alerts": False,
+    "world_overlay": True,
     "panel_geometry": [], "bar_geometry": [], "window_geometry": [],
 }
 
