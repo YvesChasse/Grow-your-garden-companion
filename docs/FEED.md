@@ -1,4 +1,27 @@
-# Public live-feed verification
+# Public API verification
+
+## Version 1.1 — November 2, 2026
+
+The companion now uses the official documented [v1 API index](https://garden.orpine.app/api/v1) and [OpenAPI 3.1 description](https://garden.orpine.app/api/v1/openapi.json). The live endpoint's documentation explicitly says its body matches the older `/api/live` response, so existing shop identity, quantities and polling behavior remain compatible.
+
+| Documented route / field | Use in version 1.1 |
+| --- | --- |
+| `/api/v1/live` | Stock, server clock and world state; fetched around `nextChangeAt` |
+| `/api/v1/items` | Full catalog names, groups and rarity; fetched at startup and daily |
+| `weather.name`, `since`, `until` | Weather-change alerts and countdown |
+| `traveler.open`, `changesAt`, `offers` | Arrival alert, arrival/departure timer, confirmed item offers |
+| optional `bonus.sellMultiplier`, `bonus.until` | Global sell-bonus status, timer and activation/change alert |
+| `event.end`, `nextEvent.name`, `nextEvent.start` | Current event ending and next event starting |
+
+Both endpoints were requested without credentials and verified again through the app's asynchronous Qt HTTPS clients. The final integration check returned **60 catalog items, 10 weather types, and 51 live item rows**, including real Traveler offers. The server timestamp was `1793667418`; these are historical observations, not current inventory.
+
+The catalog supplies no stock quantities and no Traveler-specific group. Its entries never become live inventory. A user can request a Traveler watch by name; an alert still requires that name in an actual live Traveler offer. No vendor relationship is inferred from a catalog group.
+
+The API also documents leaderboards, exact display-name rank lookups and aggregate stats. These are outside version 1.1's monitoring scope. The API has current state only, not historical snapshots or purchase/harvest commands.
+
+Reproduce with `python tools/verify_live.py --output work/live-check`. This uses both production clients and isolated preferences. The actual captured responses in `tests/observed_v1_live.json` and `tests/observed_catalog.json` are fixtures only; production never replays them.
+
+## Original version 1.0 discovery (historical)
 
 Inspected November 1, 2026. No endpoint was guessed.
 

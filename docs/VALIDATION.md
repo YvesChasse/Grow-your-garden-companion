@@ -1,5 +1,17 @@
 # Validation record
 
+## Version 1.1.0 — November 2, 2026
+
+- **50 offline checks passed**, including the original stock companion regressions plus catalog validation, catalog-only watches, advance Traveler watches, world-alert transitions and opt-outs, stale-state suppression and catalog-failure isolation.
+- **Live production-client check passed** for both `/api/v1/live` and `/api/v1/items`: 60 catalog items, 10 weather types and 51 live item rows. The live response included real Traveler offers; the app reported LIVE.
+- Rendered and inspected the watchlist, World tab, Preferences and both overlays. Screenshots in this folder show captured historical stock and server-clock countdowns. Long event timers use days/hours/minutes.
+- The Windows x64 executable built successfully and passed its isolated packaged startup check with `frozen: true`.
+- No macro code or additional runtime dependency was introduced. Existing user settings remain in the original preference folder.
+
+World notifications were verified with simulated feed transitions. Windows banner/sound delivery remains subject to the platform-specific limitations below. No active sell bonus was present in the captured response; bonus parsing and notification behavior were checked with synthetic data. Only source-client live integration and packaged startup were checked for this version, not an unattended multi-day run.
+
+## Version 1.0.0 — historical checks
+
 Validated on November 1, 2026, using Windows 11 x64, Python 3.12.14, PyQt6 / Qt 6.10.2 and PyInstaller 6.19.0.
 
 ## Passed

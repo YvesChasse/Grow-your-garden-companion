@@ -2,7 +2,9 @@
 
 A dark-purple Windows desktop companion for the GardenChat stock shown at [garden.orpine.app](https://garden.orpine.app/). Runs independently of your browser. Includes a top-screen bar, floating mini-panel, searchable watchlists, live quantities, server-based countdowns and system-tray alerts.
 
-**Windows 10/11 · Python 3.11+ · PyQt6 · GPL-3.0 · Version 1.0.0**
+**Windows 10/11 · Python 3.11+ · PyQt6 · GPL-3.0 · Version 1.1.0**
+
+Version 1.1 uses the documented public v1 API, loads the full item catalog, and adds world timers plus optional weather, Traveler-arrival and sell-bonus alerts. Existing preferences and watches are retained.
 
 ![Garden Companion watchlist window](docs/watchlist.png)
 
@@ -39,6 +41,16 @@ If you have the executable, double-click **GrowYourGardenCompanion.exe**. Python
 5. Closing the main window keeps the companion in the tray. Right-click the leaf icon to restore windows, refresh, or **Quit**. Windows may place the icon in its hidden-icons area.
 
 The watchlist starts empty so you can choose your own items. The horizontal bar scrolls when your list is wider than the screen. The panel scrolls vertically for longer lists. **Reset overlay positions** recovers windows after a monitor change.
+
+## World timers and alerts
+
+Open **World** to see the current weather, the Traveler's arrival/departure countdown, active sell bonuses, and current/next event timing. Check the alerts you want: **weather changes**, **Traveler arrives**, and **sell bonus starts or changes**. These start off; the first successful update stays quiet. The main **Desktop alerts** switch in Preferences controls all alerts.
+
+Weather, Traveler and active-bonus status can also appear in both overlays. Turn **Show weather, Traveler and bonus status in my overlays** off in World if you prefer a stock-only view.
+
+![World status and alert options](docs/world.png)
+
+*Captured during the version 1.1 live integration check; this is not a current reading.*
 
 ## Run from source
 
@@ -82,9 +94,10 @@ For an existing environment:
 
 ## Stock, clocks and alerts
 
-- The actual public feed is [`GET https://garden.orpine.app/api/live`](https://garden.orpine.app/api/live). It was traced directly from the site's application script and then fetched successfully. See [feed verification](docs/FEED.md).
+- Live stock uses [`GET /api/v1/live`](https://garden.orpine.app/api/v1/live), and the full catalog uses [`GET /api/v1/items`](https://garden.orpine.app/api/v1/items), as documented in the [OpenAPI specification](https://garden.orpine.app/api/v1/openapi.json). See [API verification](docs/FEED.md).
 - Seeds, gear, eggs, event-shop items and traveling-merchant offers are supported. Other item kinds, such as decorations, are included when the feed lists them in an event shop or traveler inventory.
-- **Traveler watchlists:** on a fresh installation, Traveler items will not appear as checkable choices until the Traveler arrives and the app receives its offers. This follows how the shop exposes its inventory. Keep the companion running when the Traveler appears to discover those items. After discovery, their names and any selected watches remain saved when the Traveler leaves.
+- **Full catalog:** choose items before their shop or event is active. Catalog names and rarity are saved locally; prices and quantities only come from live stock. An absent item shows **—**, not a made-up zero. The catalog refreshes at launch and once a day; a catalog failure does not interrupt live stock.
+- **Traveler watchlists:** select any item row and click **Watch selected with Traveler** to wait for that name in his actual offers, even before your first visit. The catalog does not identify a Traveler-specific inventory, so this watch is a request, not a promise that he sells the item. Actual offers are also discovered automatically while he is present. Saved names and watches remain after he leaves.
 - Items are discovered from real responses. There is no fabricated catalog or bundled stock fallback. Previously seen item names remain selectable after a temporary shop closes; their quantity shows **—**, never a fabricated zero.
 - Countdown clocks use the server's `now` value and a monotonic local timer. Seed/gear, egg and event-shop clocks are separate. Traveler clocks indicate departure, not a promised restock.
 - Refreshes follow `nextChangeAt`, with a small jitter and a five-minute maximum interval, matching the site's approach. Failures retry with a growing delay, capped at one minute; a numeric `Retry-After` can extend that delay up to an hour. Manual refresh is rate-limited.
@@ -128,12 +141,12 @@ The sample in `tests/observed_feed.json` is an actual captured response from Nov
 | `tools/verify_live.py` | Optional live integration check and screenshots |
 | `build.ps1` | Tested Windows executable build recipe |
 
-This is an independent companion, not an official GardenChat client. The public website endpoint is an observed implementation detail, not a promised stable API; schema changes may require an update. Dependency license notices are in [THIRD_PARTY.md](THIRD_PARTY.md) and `licenses/`.
+This is an independent companion, not an official GardenChat client. It uses the documented public v1 API; API availability and future changes remain outside the companion's control. Dependency license notices are in [THIRD_PARTY.md](THIRD_PARTY.md) and `licenses/`.
 
 ## Project information
 
 - [Feed discovery and verification](docs/FEED.md)
-- [Validation record and known testing limits](docs/VALIDATION.md) — 31 local automated checks passed for version 1.0.0.
+- [Validation record and known testing limits](docs/VALIDATION.md) — 50 local automated checks passed for version 1.1.0.
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)
 - [Report a bug or request a feature](https://github.com/YvesChasse/Grow-your-garden-companion/issues)

@@ -6,7 +6,8 @@ import time
 from PyQt6.QtCore import QObject, QTimer, QUrl, pyqtSignal
 from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 
-from .core import FEED_URL, FeedError, parse_feed, poll_delay
+from .core import FEED_URL, CATALOG_URL, FeedError, parse_feed, parse_catalog, poll_delay
+from . import __version__
 
 
 class StockClient(QObject):
@@ -14,8 +15,9 @@ class StockClient(QObject):
     failed = pyqtSignal(str)
     fetching = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, url=FEED_URL, parser=parse_feed, refresh_interval=None):
         super().__init__(parent)
+        self.url, self.parser, self.refresh_interval = url, parser, refresh_interval
         self.manager = QNetworkAccessManager(self)
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
@@ -41,7 +43,7 @@ class StockClient(QObject):
         self.timer.stop()
         self.last_attempt = time.monotonic()
         self.abort_reason = ""
-        request = QNetworkRequest(QUrl(FEED_URL))
+        request = QNetworkRequest(QUrl(self.url))
         request.setTransferTimeout(15000)
         request.setAttribute(QNetworkRequest.Attribute.RedirectPolicyAttribute,
                              QNetworkRequest.RedirectPolicy.SameOriginRedirectPolicy)
@@ -49,7 +51,7 @@ class StockClient(QObject):
                              QNetworkRequest.CacheLoadControl.AlwaysNetwork)
         request.setRawHeader(b"Accept", b"application/json")
         request.setRawHeader(b"Cache-Control", b"no-cache")
-        request.setRawHeader(b"User-Agent", b"GrowYourGardenCompanion/1.0 (Windows desktop)")
+        request.setRawHeader(b"User-Agent", f"GrowYourGardenCompanion/{__version__} (Windows desktop)".encode("ascii"))
         self.reply = self.manager.get(request)
         self.reply.finished.connect(self._finished)
         self.reply.downloadProgress.connect(self._progress)
@@ -81,10 +83,11 @@ class StockClient(QObject):
             body = bytes(reply.readAll())
             if len(body) > 2_000_000:
                 raise FeedError("The feed response exceeded the size limit.")
-            snapshot = parse_feed(json.loads(body))
+            snapshot = self.parser(json.loads(body))
             self.failures = 0
             self.retry_not_before = 0.0
-            self.timer.start(int(poll_delay(snapshot, random.uniform(0, 2)) * 1000))
+            delay = self.refresh_interval if self.refresh_interval is not None else poll_delay(snapshot, random.uniform(0, 2))
+            self.timer.start(int(delay * 1000))
             self.received.emit(snapshot)
         except (ValueError, TypeError, OverflowError) as error:
             self.failures += 1
@@ -103,3 +106,9 @@ class StockClient(QObject):
         self.deadline.stop()
         if self.reply:
             self.reply.abort()
+
+
+class CatalogClient(StockClient):
+    """Fetch once at launch, then daily; failures do not invalidate live stock."""
+    def __init__(self, parent=None):
+        super().__init__(parent, url=CATALOG_URL, parser=parse_catalog, refresh_interval=86400)

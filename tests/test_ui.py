@@ -3,11 +3,12 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import Mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
-from garden_companion.core import parse_feed
+from garden_companion.core import parse_feed, parse_catalog
 from garden_companion.preferences import Preferences
 from garden_companion.ui import Controller, clamp_geometry
 
@@ -92,6 +93,69 @@ class InterfaceTests(unittest.TestCase):
         window = self.controller.overlays["panel"]
         clamp_geometry(window, [99999, 99999, 365, 490], (365, 490))
         self.assertTrue(APP.primaryScreen().availableGeometry().contains(window.geometry()))
+
+    def test_catalog_only_item_is_watchable_without_invented_quantity(self):
+        c = self.controller
+        catalog = parse_catalog(json.loads(Path(__file__).with_name('observed_catalog.json').read_text(encoding='utf-8-sig')))
+        c.accept_catalog(catalog)
+        c.window.search.setText('Frost Pear')
+        self.assertEqual(c.window.table.rowCount(), 1)
+        self.assertEqual(c.window.table.item(0, 4).text(), '—')
+        self.assertEqual(c.window.table.item(0, 3).text(), 'Frost Fair')
+        c.window.table.item(0, 0).setCheckState(Qt.CheckState.Checked)
+        APP.processEvents()
+        self.assertIn('event:Frost Pear', c.watched)
+        self.assertNotIn('event:Frost Pear', c.snapshot.by_key)
+        self.assertIn('event:Frost Pear', Preferences(self.preferences.path).values['catalog'])
+
+    def test_traveler_watch_can_be_added_before_first_visit(self):
+        c = self.controller
+        c.window.search.setText('Carrot')
+        c.window.table.selectRow(0)
+        c.window.watch_with_traveler()
+        self.assertIn('traveler:Carrot', c.watched)
+        self.assertNotIn('traveler:Carrot', c.snapshot.by_key)
+        self.assertIsNone(next(row[3] for row in c.watched_entries() if row[0] == 'traveler:Carrot'))
+
+    def test_catalog_failure_preserves_live_status_and_saved_catalog(self):
+        c = self.controller
+        cached = dict(c.preferences.values['catalog'])
+        c.catalog_failed('Test unavailable')
+        self.assertEqual(c.short_status(), 'LIVE')
+        self.assertEqual(c.preferences.values['catalog'], cached)
+        self.assertIn('Catalog unavailable', c.window.catalog_status.text())
+
+    def test_world_alert_preferences_persist_and_global_mute_applies(self):
+        c = self.controller
+        c.notify = Mock()
+        c.window.world_panel.checks['weather_alerts'].setChecked(True)
+        self.assertTrue(Preferences(self.preferences.path).values['weather_alerts'])
+        self.data['weather']['name'] = 'New weather'
+        c.accept_snapshot(parse_feed(self.data))
+        c.notify.assert_called_once()
+        c.notify.reset_mock()
+        c.preferences.values['notifications'] = False
+        self.data['weather']['name'] = 'Another weather'
+        c.accept_snapshot(parse_feed(self.data))
+        c.notify.assert_not_called()
+
+    def test_world_timers_stale_labels_and_overlay_toggle(self):
+        c = self.controller
+        self.assertIn('Traveler', c.overlays['panel'].world_line.text())
+        c.window.world_panel.checks['world_overlay'].setChecked(False)
+        self.assertTrue(c.overlays['panel'].world_line.isHidden())
+        c.feed_failed('Disconnected')
+        self.assertIn('Last known', c.window.world_panel.status.text())
+
+    def test_expired_response_does_not_send_world_alert(self):
+        c = self.controller
+        c.notify = Mock()
+        c.preferences.values['weather_alerts'] = True
+        self.data['weather']['name'] = 'Rain'
+        self.data['nextChangeAt'] = self.data['now'] - 60
+        c.accept_snapshot(parse_feed(self.data))
+        self.assertEqual(c.short_status(), 'STALE')
+        c.notify.assert_not_called()
 
 
 if __name__ == "__main__":

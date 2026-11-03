@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QFontDatabase
 from PyQt6.QtWidgets import QApplication
-from garden_companion.core import FEED_URL
+from garden_companion.core import FEED_URL, CATALOG_URL
 from garden_companion.preferences import Preferences
 from garden_companion.ui import Controller
 
@@ -37,10 +37,16 @@ def main():
     preferences.values["watchlist"] = ["seeds:Carrot", "seeds:Coconut", "eggs:Rare Egg",
                                         "gear:Basic Sprinkler", "event:Starfruit", "seeds:Bone Blossom"]
     controller = Controller(app, preferences, tray=False)
-    result = {"endpoint": FEED_URL, "ok": False}
+    result = {"endpoint": FEED_URL, "catalog_endpoint": CATALOG_URL, "ok": False}
+    catalog_ready = False
+    finished = False
 
-    def capture(snapshot):
+    def capture():
+        if not controller.snapshot or not catalog_ready or finished:
+            return
+        snapshot = controller.snapshot
         controller.client.timer.stop()
+        controller.catalog_client.timer.stop()
         result.update(ok=True, server_now=snapshot.now, next_change_at=snapshot.next_change_at,
                       item_count=len(snapshot.items), categories=sorted({i.category for i in snapshot.items}),
                       status=controller.short_status())
@@ -53,6 +59,9 @@ def main():
         controller.window.grab().save(str(args.output / "watchlist.png"))
         controller.window.tabs.setCurrentIndex(1)
         app.processEvents()
+        controller.window.grab().save(str(args.output / "world.png"))
+        controller.window.tabs.setCurrentIndex(2)
+        app.processEvents()
         controller.window.grab().save(str(args.output / "preferences.png"))
         for name, overlay in controller.overlays.items():
             overlay.grab().save(str(args.output / f"{name}.png"))
@@ -63,12 +72,25 @@ def main():
         finish()
 
     def finish():
+        nonlocal finished
+        if finished:
+            return
+        finished = True
         (args.output / "report.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
         print(json.dumps(result))
         controller.quit()
 
-    controller.client.received.connect(capture)
+    def got_catalog(catalog):
+        nonlocal catalog_ready
+        catalog_ready = True
+        result['catalog_count'] = len(catalog.items)
+        result['weather_types'] = len(catalog.weather)
+        capture()
+
+    controller.client.received.connect(lambda _: capture())
+    controller.catalog_client.received.connect(got_catalog)
     controller.client.failed.connect(fail)
+    controller.catalog_client.failed.connect(fail)
     QTimer.singleShot(30000, lambda: fail("Live verification timed out"))
     app.exec()
     directory.cleanup()

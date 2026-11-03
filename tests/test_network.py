@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QCoreApplication
 from PyQt6.QtNetwork import QNetworkReply
 from PyQt6.QtWidgets import QApplication
-from garden_companion.network import StockClient
+from garden_companion.network import StockClient, CatalogClient
 
 APP = QCoreApplication.instance() or QApplication([])
 
@@ -83,6 +83,30 @@ class NetworkTests(unittest.TestCase):
         self.complete(Reply(b" " * 2_000_001))
         self.assertIn("size limit", self.errors[0])
         self.assertEqual(self.received, [])
+
+    def test_catalog_has_independent_endpoint_and_daily_schedule(self):
+        catalog = CatalogClient()
+        received = []
+        catalog.received.connect(received.append)
+        reply = Reply(Path(__file__).with_name('observed_catalog.json').read_bytes())
+        catalog.reply = reply
+        catalog._finished()
+        self.assertEqual(catalog.url, 'https://garden.orpine.app/api/v1/items')
+        self.assertEqual(self.client.url, 'https://garden.orpine.app/api/v1/live')
+        self.assertEqual(len(received[0].items), 60)
+        self.assertEqual(catalog.timer.interval(), 86400000)
+        catalog.stop()
+
+    def test_catalog_malformed_response_does_not_emit_empty_catalog(self):
+        catalog = CatalogClient()
+        received, errors = [], []
+        catalog.received.connect(received.append)
+        catalog.failed.connect(errors.append)
+        catalog.reply = Reply(b'{"items":null,"weather":[]}')
+        catalog._finished()
+        self.assertEqual(received, [])
+        self.assertEqual(len(errors), 1)
+        catalog.stop()
 
 
 if __name__ == "__main__":
