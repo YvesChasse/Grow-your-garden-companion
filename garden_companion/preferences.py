@@ -9,6 +9,8 @@ DEFAULTS = {
     "repeat_alerts": True, "start_in_tray": False, "opacity": 96,
     "weather_alerts": False, "traveler_alerts": False, "bonus_alerts": False,
     "world_overlay": True,
+    "vr_bar_visible": False, "vr_panel_visible": False,
+    "vr_bar_geometry": [], "vr_panel_geometry": [],
     "panel_geometry": [], "bar_geometry": [], "window_geometry": [],
 }
 
@@ -43,7 +45,7 @@ class Preferences:
             opacity = raw.get("opacity", 96)
             if isinstance(opacity, int) and not isinstance(opacity, bool):
                 self.values["opacity"] = max(55, min(100, opacity))
-            for key in ("panel_geometry", "bar_geometry", "window_geometry"):
+            for key in ("panel_geometry", "bar_geometry", "window_geometry", "vr_bar_geometry", "vr_panel_geometry"):
                 geometry = raw.get(key, [])
                 if isinstance(geometry, list) and len(geometry) == 4 and all(type(x) is int for x in geometry):
                     self.values[key] = geometry

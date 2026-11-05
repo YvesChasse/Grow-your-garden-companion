@@ -46,6 +46,15 @@ class PreferencesTests(unittest.TestCase):
         first.values["catalog"]["seed:test"] = {}
         self.assertEqual(second.values["catalog"], {})
 
+    def test_vr_defaults_and_invalid_saved_values(self):
+        self.path.write_text(json.dumps({'version': 1, 'watchlist': ['seeds:Carrot'],
+                                        'vr_panel_visible': 'yes', 'vr_bar_geometry': [1, 'bad', 3, 4]}))
+        p = Preferences(self.path)
+        self.assertFalse(p.values['vr_panel_visible'])
+        self.assertFalse(p.values['vr_bar_visible'])
+        self.assertEqual(p.values['vr_bar_geometry'], [])
+        self.assertEqual(p.values['watchlist'], ['seeds:Carrot'])
+
 
 if __name__ == "__main__":
     unittest.main()

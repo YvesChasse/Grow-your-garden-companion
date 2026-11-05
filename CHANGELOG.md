@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0 — 2026-11-05
+
+- Added separate opaque VR capture bar and panel windows for use with XSOverlay and similar window-capture software.
+- Shared existing watchlists, live quantities, countdowns and world status with the VR views, without adding network polling or dependencies.
+- Added independent saved VR window visibility and geometry, Preferences controls and tray toggles.
+- Kept desktop opacity separate from capture windows, and restored minimized windows when enabled again.
+- Made Preferences scrollable and added VR setup and troubleshooting documentation.
+- Added regression coverage for capture windows and existing preference compatibility. Headset capture remains unverified.
+
 ## 1.1.0 — 2026-11-02
 
 - Migrated live stock to the documented `/api/v1/live` endpoint.
