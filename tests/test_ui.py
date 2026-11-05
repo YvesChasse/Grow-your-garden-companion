@@ -37,6 +37,79 @@ class InterfaceTests(unittest.TestCase):
         APP.processEvents()
         self.directory.cleanup()
 
+    def test_capture_windows_are_normal_opaque_windows(self):
+        c = self.controller
+        for mode in ('bar', 'panel'):
+            vr = c.overlays[f'vr_{mode}']
+            self.assertEqual(vr.windowType(), Qt.WindowType.Window)
+            self.assertFalse(vr.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground))
+            self.assertFalse(vr.windowFlags() & Qt.WindowType.FramelessWindowHint)
+            self.assertEqual(vr.windowTitle(), f'Garden Companion - VR {mode.title()}')
+            self.assertFalse(vr.isVisible())
+        c.window.opacity_changed(55)
+        self.assertEqual(c.overlays['vr_panel'].windowOpacity(), 1.0)
+        self.assertLess(c.overlays['panel'].windowOpacity(), 0.56)
+
+    def test_capture_visibility_close_and_tray_are_independent(self):
+        c = self.controller
+        c.window.checks['vr_panel_visible'].setChecked(True)
+        self.assertTrue(c.tray_actions['vr_panel'].isChecked())
+        self.assertTrue(c.overlays['vr_panel'].isVisible())
+        c.window.hide()
+        self.assertTrue(c.overlays['vr_panel'].isVisible())
+        c.overlays['vr_panel'].close()
+        self.assertFalse(c.window.checks['vr_panel_visible'].isChecked())
+        self.assertFalse(c.tray_actions['vr_panel'].isChecked())
+        self.assertFalse(Preferences(self.preferences.path).values['vr_panel_visible'])
+        self.assertTrue(c.overlays['panel'].isVisible())
+        c.tray_actions['vr_panel'].trigger()
+        self.assertTrue(c.overlays['vr_panel'].isVisible())
+
+    def test_capture_restore_from_minimized(self):
+        c = self.controller
+        c.set_overlay('vr_bar', True)
+        vr = c.overlays['vr_bar']
+        vr.showMinimized()
+        APP.processEvents()
+        c.set_overlay('vr_bar', True)
+        self.assertFalse(vr.isMinimized())
+        self.assertTrue(vr.isVisible())
+
+    def test_capture_geometry_and_visibility_survive_restart(self):
+        c = self.controller
+        c.set_overlay('vr_panel', True)
+        c.overlays['vr_panel'].setGeometry(80, 80, 420, 520)
+        c.overlays['vr_panel'].remember()
+        saved = Preferences(self.preferences.path)
+        self.assertEqual(saved.values['vr_panel_geometry'], [80, 80, 420, 520])
+        second = Controller(APP, saved, network=False, tray=False)
+        try:
+            self.assertTrue(second.overlays['vr_panel'].isVisible())
+            self.assertEqual(second.overlays['vr_panel'].width(), 420)
+            self.assertFalse(second.overlays['vr_bar'].isVisible())
+        finally:
+            second.cleanup()
+            second.window.hide()
+            second.window.deleteLater()
+            for overlay in second.overlays.values():
+                overlay.save_timer.stop()
+                overlay.hide()
+                overlay.deleteLater()
+            APP.processEvents()
+
+    def test_capture_shares_stock_world_timers_and_stale_status(self):
+        c = self.controller
+        c.window.search.setText('Carrot')
+        c.window.table.item(0, 0).setCheckState(Qt.CheckState.Checked)
+        for mode in ('bar', 'panel'):
+            vr = c.overlays[f'vr_{mode}']
+            self.assertEqual(len(vr.time_labels), 1)
+            self.assertEqual(vr.time_labels[0][2].stock, 22)
+            self.assertEqual(vr.clock_line.text(), c.overlays[mode].clock_line.text())
+            self.assertEqual(vr.world_line.text(), c.overlays[mode].world_line.text())
+        c.feed_failed('Disconnected')
+        self.assertEqual(c.overlays['vr_panel'].status.text(), 'STALE')
+
     def test_feed_populates_table_and_filter(self):
         window = self.controller.window
         self.assertEqual(window.table.rowCount(), 45)

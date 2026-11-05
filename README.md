@@ -2,7 +2,16 @@
 
 A dark-purple Windows desktop companion for the GardenChat stock shown at [garden.orpine.app](https://garden.orpine.app/). Runs independently of your browser. Includes a top-screen bar, floating mini-panel, searchable watchlists, live quantities, server-based countdowns and system-tray alerts.
 
-**Windows 10/11 · Python 3.11+ · PyQt6 · GPL-3.0 · Version 1.1.0**
+**Windows 10/11 · Python 3.11+ · PyQt6 · GPL-3.0 · Version 1.2.0**
+
+## New in v1.2
+
+- Separate **VR capture bar and panel** for XSOverlay and other window-capture overlays.
+- Opaque, titled, resizable windows with the same live watchlist, restock clocks and world status as the desktop views.
+- Independent VR visibility and saved positions, with controls in Preferences and the system tray.
+- Scrollable Preferences so controls remain accessible on smaller displays.
+
+See [VR setup and troubleshooting](docs/VR.md). This provides Windows capture targets; XSOverlay or another SteamVR overlay app displays them in your headset. In-headset capture has not yet been verified.
 
 ## New in v1.1
 
@@ -25,7 +34,7 @@ Existing preferences and watches are retained. This repository contains the stoc
 
 To create a standalone Windows app, double-click **Build EXE.cmd**. The executable is generated locally in `dist/`; compiled binaries are not stored in the source repository.
 
-**Updating from v1.0:** quit the old companion from its tray menu, replace the application/source files, and run **Setup.cmd** again if using source. Your saved watchlist stays in the same preferences folder. New world alerts start off; enable the ones you want in **World**.
+**Updating from v1.0/v1.1:** quit the old companion from its tray menu, replace the application/source files, and run **Setup.cmd** again if using source. Your saved watchlist stays in the same preferences folder. VR windows start off; enable them in **Preferences → VR / XSOverlay**. World alerts are opt-in in **World**.
 
 ## Two ways to keep an eye on your garden
 
@@ -38,6 +47,17 @@ To create a standalone Windows app, double-click **Build EXE.cmd**. The executab
 ![Floating mini-panel](docs/panel.png)
 
 Both overlays stay above normal desktop windows and remember their positions, sizes and opacity. Their screenshots show captured stock from the same verification session.
+
+## Use it in VR with XSOverlay
+
+1. Open **Preferences → VR / XSOverlay** and enable **Show VR capture bar**, **Show VR capture panel**, or both.
+2. In XSOverlay, open **Layout mode**, choose **Add Window**, then select **Garden Companion - VR Bar** or **Garden Companion - VR Panel** as the capture target.
+3. Use **Windows Graphics Capture** in XSOverlay's window-capture settings. Position and scale the view in VR, and adjust its opacity there.
+4. Keep the captured window open and unminimized. The main watchlist window can be hidden to the tray. Restore a capture window using its tray toggle or Preferences if it was closed.
+
+The VR windows stay on top on the desktop, use solid backgrounds, and keep stable titles. Their content uses your existing watchlist and the same API connection; desktop opacity controls do not change VR capture windows. Desktop alerts remain Windows notifications and are not automatically forwarded into VR.
+
+Other overlay tools with Windows window capture can select these same windows; their setup and compatibility vary. See [the VR guide](docs/VR.md) for recovery steps and testing limits. XSOverlay's official documentation covers [Layout mode / Add Window](https://xsoverlay.vercel.app/gettingstarted) and [capture methods](https://xsoverlay.vercel.app/settings).
 
 ## Start the Windows app
 
@@ -115,11 +135,11 @@ For an existing environment:
 - The first successful response establishes a quiet baseline. Alerts fire when watched items become available, and optionally on a new restock cycle when they remain available. Duplicate responses do not repeat the same alert. Alerts are grouped into one message per update.
 - Notifications use the Windows system tray. Sound is optional. Windows notification preferences and Do Not Disturb affect whether messages appear. Use **Test notification** to check your machine.
 
-The app must be running and the PC awake to monitor stock. It reconnects after interrupted requests; it cannot recover notifications for every missed restock while the computer was asleep. Standard always-on-top windows work over normal desktop and borderless windows; this is not a VR overlay or a game injection tool.
+The app must be running and the PC awake to monitor stock. It reconnects after interrupted requests; it cannot recover notifications for every missed restock while the computer was asleep. Desktop windows work over normal desktop and borderless windows. VR viewing requires a separate window-capture overlay app such as XSOverlay; the companion does not inject into the game or connect directly to SteamVR.
 
 ## Preferences and privacy
 
-Settings are stored at `%LOCALAPPDATA%\GrowYourGardenCompanion\preferences.json`. They include watchlists, remembered item names, overlay visibility, positions, opacity, alert options and startup-window preference. A small rotating `companion.log` in the same folder records unexpected application errors.
+Settings are stored at `%LOCALAPPDATA%\GrowYourGardenCompanion\preferences.json`. They include watchlists, remembered item names, desktop and VR window visibility and positions, desktop opacity, alert options and startup-window preference. A small rotating `companion.log` in the same folder records unexpected application errors.
 
 **Start with the main window hidden** applies when you launch the companion; it does not register automatic launch at Windows sign-in. You can use a normal Windows shortcut if you want to start it manually from elsewhere.
 
@@ -157,7 +177,8 @@ This is an independent companion, not an official GardenChat client. It uses the
 ## Project information
 
 - [Feed discovery and verification](docs/FEED.md)
-- [Validation record and known testing limits](docs/VALIDATION.md) — 50 local automated checks passed for version 1.1.0.
+- [Validation record and known testing limits](docs/VALIDATION.md)
+- [VR setup and troubleshooting](docs/VR.md)
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)
 - [Report a bug or request a feature](https://github.com/YvesChasse/Grow-your-garden-companion/issues)

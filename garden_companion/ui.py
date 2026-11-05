@@ -114,6 +114,10 @@ def clamp_geometry(widget, stored, default_size, top=False):
         rect = QRect(available.center().x() - width // 2,
                      available.top() + 12 if top else available.center().y() - height // 2,
                      width, height)
+    handle = widget.windowHandle()
+    if handle:
+        margins = handle.frameMargins()
+        available = available.adjusted(margins.left(), margins.top(), -margins.right(), -margins.bottom())
     width = min(max(widget.minimumWidth(), rect.width()), available.width())
     height = min(max(widget.minimumHeight(), rect.height()), available.height())
     x = min(max(rect.x(), available.left()), available.right() - width + 1)
@@ -122,16 +126,20 @@ def clamp_geometry(widget, stored, default_size, top=False):
 
 
 class Overlay(QWidget):
-    def __init__(self, controller, mode):
-        super().__init__(None, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+    def __init__(self, controller, mode, *, capture=False):
+        flags = Qt.WindowType.Window if capture else Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint
+        super().__init__(None, flags | Qt.WindowType.WindowStaysOnTopHint)
         self.controller = controller
         self.mode = mode
+        self.capture = capture
+        self.key = f"vr_{mode}" if capture else mode
         self.ready = False
         self.drag_offset = None
         self.time_labels = []
-        self.setWindowTitle(f"Garden Companion · {mode.title()}")
+        self.setWindowTitle(f"Garden Companion - VR {mode.title()}" if capture else f"Garden Companion · {mode.title()}")
         self.setWindowIcon(controller.icon)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        if not capture:
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMinimumSize(650, 142) if mode == "bar" else self.setMinimumSize(310, 300)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -142,7 +150,7 @@ class Overlay(QWidget):
         layout.setContentsMargins(14, 10, 14, 10)
         layout.setSpacing(7)
         header = QHBoxLayout()
-        title = label("⠿  GARDEN", "eyebrow")
+        title = label("⠿  GARDEN VR" if capture else "⠿  GARDEN", "eyebrow")
         title.setCursor(Qt.CursorShape.SizeAllCursor)
         title.installEventFilter(self)
         title.setToolTip("Drag to move this overlay")
@@ -151,11 +159,12 @@ class Overlay(QWidget):
         self.status.setStyleSheet("font-size: 10px;")
         header.addWidget(self.status)
         header.addStretch()
-        swap = button("Panel" if mode == "bar" else "Bar", lambda: controller.switch_overlay(mode), True)
-        swap.setToolTip("Switch to the other overlay layout")
-        header.addWidget(swap)
+        if not capture:
+            swap = button("Panel" if mode == "bar" else "Bar", lambda: controller.switch_overlay(mode), True)
+            swap.setToolTip("Switch to the other overlay layout")
+            header.addWidget(swap)
         header.addWidget(button("Manage", controller.show_window, True))
-        hide = button("×", lambda: controller.set_overlay(mode, False), True)
+        hide = button("×", lambda: controller.set_overlay(self.key, False), True)
         hide.setToolTip("Hide overlay; restore it from the tray or Preferences")
         header.addWidget(hide)
         layout.addLayout(header)
@@ -205,8 +214,8 @@ class Overlay(QWidget):
             self.save_timer.start(400)
 
     def remember(self):
-        g = self.geometry()
-        self.controller.preferences.values[f"{self.mode}_geometry"] = [g.x(), g.y(), g.width(), g.height()]
+        g = self.normalGeometry() if self.isMinimized() or self.isMaximized() else self.geometry()
+        self.controller.preferences.values[f"{self.key}_geometry"] = [g.x(), g.y(), g.width(), g.height()]
         self.controller.save()
 
     def closeEvent(self, event):
@@ -214,7 +223,7 @@ class Overlay(QWidget):
             event.accept()
         else:
             event.ignore()
-            self.controller.set_overlay(self.mode, False)
+            self.controller.set_overlay(self.key, False)
 
     def rebuild(self):
         content = QWidget()
@@ -394,6 +403,8 @@ class MainWindow(QWidget):
             ("NOTIFICATIONS", [("notifications", "Desktop alerts (stock and enabled world alerts)"), ("sound", "Play a sound with alerts"),
                                 ("repeat_alerts", "Alert again each restock, even if still in stock")]),
             ("IN THE BACKGROUND", [("start_in_tray", "Start with the main window hidden")]),
+            ("VR / XSOVERLAY", [("vr_bar_visible", "Show VR capture bar"),
+                                ("vr_panel_visible", "Show VR capture panel")]),
         ]
         for row, (heading, choices) in enumerate(sections):
             card = QFrame()
@@ -421,8 +432,13 @@ class MainWindow(QWidget):
         box.addWidget(slider)
         self.opacity_label.setText(f"OVERLAY OPACITY · {slider.value()}%")
         box.addWidget(button("Reset overlay positions", self.controller.reset_positions))
-        grid.addWidget(opacity_card, 1, 1)
+        grid.addWidget(opacity_card, 2, 0, 1, 2)
         layout.addLayout(grid)
+        vr_note = label("In XSOverlay: Layout mode → Add Window → select Garden Companion - VR Bar or VR Panel. "
+                        "Use Windows Graphics Capture. Keep the captured window open and unminimized; "
+                        "you can hide this main window to the tray. VR windows stay opaque; adjust their VR size and opacity in XSOverlay.", "muted")
+        vr_note.setWordWrap(True)
+        layout.addWidget(vr_note)
         note = label("The tray keeps monitoring when windows are hidden. Right-click its leaf icon to restore a window or quit.\n"
                      "Alerts start after the first successful update; your current stock will not trigger a startup burst.\n"
                      "Windows notification settings and Do Not Disturb may silence desktop alerts.", "muted")
@@ -438,7 +454,10 @@ class MainWindow(QWidget):
         self.pref_path.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.pref_path)
         layout.addStretch()
-        return page
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(page)
+        return scroll
 
     def preference_changed(self, key, value):
         if key.endswith("_visible"):
@@ -451,7 +470,8 @@ class MainWindow(QWidget):
         self.opacity_label.setText(f"OVERLAY OPACITY · {value}%")
         self.controller.preferences.values["opacity"] = value
         for overlay in self.controller.overlays.values():
-            overlay.setWindowOpacity(value / 100)
+            if not overlay.capture:
+                overlay.setWindowOpacity(value / 100)
         self.controller.save()
 
     def populate(self):
@@ -604,12 +624,14 @@ class Controller:
         self.window = MainWindow(self)
         for mode in ("bar", "panel"):
             self.overlays[mode] = Overlay(self, mode)
+            self.overlays[f"vr_{mode}"] = Overlay(self, mode, capture=True)
         self.tray = QSystemTrayIcon(self.icon)
         self.tray.setToolTip("Grow Your Garden Companion")
         menu = QMenu()
         menu.addAction("Open watchlist", self.show_window)
         self.tray_actions = {}
-        for mode, title in [("bar", "Top-screen bar"), ("panel", "Floating mini-panel")]:
+        for mode, title in [("bar", "Top-screen bar"), ("panel", "Floating mini-panel"),
+                            ("vr_bar", "VR capture bar"), ("vr_panel", "VR capture panel")]:
             action = QAction(title, menu)
             action.setCheckable(True)
             action.triggered.connect(lambda checked, m=mode: self.set_overlay(m, checked))
@@ -627,7 +649,7 @@ class Controller:
             self.tray.show()
         self.restore_positions()
         for mode, overlay in self.overlays.items():
-            overlay.setWindowOpacity(preferences.values["opacity"] / 100)
+            overlay.setWindowOpacity(1.0 if overlay.capture else preferences.values["opacity"] / 100)
             self.set_overlay(mode, preferences.values[f"{mode}_visible"], persist=False)
         if not preferences.values["start_in_tray"] or not self.tray_available:
             self.window.show()
@@ -753,6 +775,11 @@ class Controller:
         overlay = self.overlays[mode]
         overlay.setVisible(visible)
         if visible:
+            if overlay.isMinimized():
+                overlay.showNormal()
+            if overlay.capture and not overlay.isMaximized():
+                g = overlay.geometry()
+                clamp_geometry(overlay, [g.x(), g.y(), g.width(), g.height()], (365, 490))
             overlay.raise_()
         for check in (self.window.checks[f"{mode}_visible"], self.tray_actions[mode]):
             check.blockSignals(True)
@@ -778,12 +805,12 @@ class Controller:
         clamp_geometry(self.window, self.preferences.values["window_geometry"], (1080, 810))
         for mode, overlay in self.overlays.items():
             clamp_geometry(overlay, self.preferences.values[f"{mode}_geometry"],
-                           (1050, 160) if mode == "bar" else (365, 490), mode == "bar")
+                           (1050, 160) if overlay.mode == "bar" else (365, 490), overlay.mode == "bar")
 
     def reset_positions(self):
         for mode, overlay in self.overlays.items():
             self.preferences.values[f"{mode}_geometry"] = []
-            clamp_geometry(overlay, [], (1050, 160) if mode == "bar" else (365, 490), mode == "bar")
+            clamp_geometry(overlay, [], (1050, 160) if overlay.mode == "bar" else (365, 490), overlay.mode == "bar")
         self.save()
 
     def save_window_geometry(self):

@@ -1,5 +1,15 @@
 # Validation record
 
+## Version 1.2.0 — November 5, 2026
+
+- **56 offline checks passed**, including capture-window flags and opacity, independent visibility and close/tray behavior, restoration from minimized state, saved geometry across restart, shared watchlist/stock/world clocks and stale state, and old/invalid preference handling.
+- **Native Windows window check passed** for both `Garden Companion - VR Bar` and `Garden Companion - VR Panel`: enumerated as visible top-level windows, not minimized, not utility/tool windows, and not layered windows. Window frames were within the available desktop area, including the title bar. See `tools/verify_vr.py` for the repeatable offline check.
+- Rendered and inspected the VR bar, panel and scrollable Preferences page using historical stock fixtures and isolated settings. The guide's images show source-window content, not current stock or headset output.
+- Windows x64 executable built with the existing build script and passed its isolated packaged startup check with `frozen: true` and all four desktop/VR windows registered.
+- No additional runtime dependency, network polling, game-input code or change to personal settings was needed. Existing API and alert regressions passed; this UI update did not repeat the historical live API integration check below.
+
+**Headset / XSOverlay capture has not been tested.** Windows enumeration and application checks establish suitable capture targets, but do not verify headset rendering, VR pointer interaction, saved-layout reconnection or other overlay apps. [VR.md](VR.md) includes the remaining manual checks. Notifications continue to use the Windows tray and are not forwarded to XSOverlay.
+
 ## Version 1.1.0 — November 2, 2026
 
 - **50 offline checks passed**, including the original stock companion regressions plus catalog validation, catalog-only watches, advance Traveler watches, world-alert transitions and opt-outs, stale-state suppression and catalog-failure isolation.
